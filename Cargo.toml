@@ -1,0 +1,29 @@
+[package]
+name = "warp-postgres-example"
+version = "0.1.0"
+authors = ["Mario Zupan <mario@zupzup.org>"]
+edition = "2018"
+
+[dependencies]
+tokio = { version = "0.2", features = ["macros", "rt-threaded"] }
+warp = "0.2"
+mobc-postgres = { version = "0.5", features = ["with-chrono-0_4"] }
+mobc = "0.5"
+serde = {version = "1.0", features = ["derive"] }
+serde_derive = "1.0"
+serde_json = "1.0"
+thiserror = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+moka = { version = "0.11.3", features = ["future"] }
+
+[dependencies.uuid]
+version = "1.4.0"
+features = [
+    "v4",                
+    "v5",               
+]
+
+
+[profile.dev]
+debug = 0
+

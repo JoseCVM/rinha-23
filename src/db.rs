@@ -63,11 +63,7 @@ pub async fn search_users(db_pool: &DBPool, search: String) -> Result<Vec<User>>
         .await
         .map_err(DBQueryError)?;
 
-    let mut users = Vec::new();
-    for row in rows {
-        users.push(row_to_user(&row));
-    }
-
+    let users : Vec<User> = rows.iter().map(|row| row_to_user(&row)).collect();
     Ok(users)
 }
 
@@ -101,11 +97,12 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
     let mut con = get_db_con(db_pool).await?;
     let id = Uuid::new_v5(&Uuid::NAMESPACE_OID, &body.apelido.as_bytes()).to_string();
 
+    let transaction = con.transaction().await?;
     // Insert user
     let insert_user_query = format!(
         "INSERT INTO Users (id, apelido, nome, nascimento) VALUES ($1, $2, $3, $4) RETURNING *"
     );
-    con.query_one(
+    transaction.query_one(
         insert_user_query.as_str(),
         &[&id, &body.apelido, &body.nome, &body.nascimento],
     )
@@ -115,7 +112,6 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
     // Insert skills
     match &body.stack {
         Some(skills) => {
-            let transaction = con.transaction().await?;
             let query = "INSERT INTO UserSkills (UserID, Skill) VALUES ($1, $2)";
 
             for skill in skills {
@@ -125,7 +121,6 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
                     .map_err(DBQueryError)?;
             }
 
-            transaction.commit().await?;
             let params = (1..=skills.len())
                 .map(|i| format!("${}", i + 1))
                 .collect::<Vec<String>>()
@@ -137,12 +132,13 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
             let mut param_values: Vec<&(dyn ToSql + Sync)> = Vec::new();
             param_values.push(&id);
             param_values.extend(skills.iter().map(|s| s as &(dyn ToSql + Sync)));
-            con.execute(associate_skills_query.as_str(), &param_values)
+            transaction.execute(associate_skills_query.as_str(), &param_values)
                 .await
                 .map_err(DBQueryError)?;
         }
         None => {}
     }
+    transaction.commit().await?;
 
     Ok(User {
         id,

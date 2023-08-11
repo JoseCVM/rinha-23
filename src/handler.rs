@@ -1,7 +1,12 @@
 use crate::{data::*, db, error::Error::*, DBPool, Result};
 use moka::future::Cache;
 use serde_derive::Deserialize;
-use warp::{http::StatusCode, reject, reply::json, Reply};
+use warp::{
+    http::StatusCode,
+    reject,
+    reply::{json, WithStatus},
+    Reply,
+};
 
 #[derive(Deserialize)]
 pub struct SearchQuery {
@@ -21,8 +26,8 @@ pub async fn health_handler(db_pool: DBPool) -> Result<impl Reply> {
 pub async fn create_user_handler(
     body: PossibleCreateUserRequest,
     db_pool: DBPool,
-    cache: Cache<String, User>
-) -> Result<impl Reply> {
+    cache: Cache<String, User>,
+) -> Result<WithStatus<impl Reply>> {
     let create_user_request: CreateUserRequest = {
         if body.apelido.is_none() || body.nome.is_none() || body.nascimento.is_none() {
             return Err(reject::custom(MissingRequiredFields));
@@ -37,8 +42,8 @@ pub async fn create_user_handler(
     match db::create_user(&db_pool, create_user_request).await {
         Ok(user) => {
             cache.insert(user.id.clone(), user.clone()).await;
-            Ok(json(&user))
-        },
+            Ok(warp::reply::with_status(json(&user), StatusCode::CREATED))
+        }
         Err(e) => Err(reject::custom(e)),
     }
 }
@@ -50,15 +55,13 @@ pub async fn fetch_user_by_id_handler(
 ) -> Result<impl Reply> {
     match cache.get(&id) {
         Some(user) => return Ok(json(&user)),
-        None => {
-            match db::fetch_user_by_id(&db_pool, &id).await {
-                Ok(Some(user)) => {
-                    cache.insert(user.id.clone(), user.clone()).await;
-                    return Ok(json(&user));
-                },
-                Ok(None) => return Err(reject::custom(UserNotFound)),
-                Err(e) => return Err(reject::custom(e)),
+        None => match db::fetch_user_by_id(&db_pool, &id).await {
+            Ok(Some(user)) => {
+                cache.insert(user.id.clone(), user.clone()).await;
+                return Ok(json(&user));
             }
+            Ok(None) => return Err(reject::custom(UserNotFound)),
+            Err(e) => return Err(reject::custom(e)),
         },
     }
 }

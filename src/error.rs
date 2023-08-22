@@ -17,7 +17,9 @@ pub enum Error {
     #[error("Missing required fields in body")]
     MissingRequiredFields,
     #[error("User not found")]
-    UserNotFound
+    UserNotFound,
+    #[error("Invalid search string")]
+    InvalidSearch
 }
 
 #[derive(Serialize)]
@@ -47,6 +49,10 @@ pub async fn handle_rejection(err: Rejection) -> std::result::Result<impl Reply,
                     code = StatusCode::INTERNAL_SERVER_ERROR;
                     message = "Internal Server Error";
                 }
+            }
+            Error::InvalidSearch => {
+                code = StatusCode::BAD_REQUEST;
+                message = "Invalid Search";
             }
             Error::MissingRequiredFields => {
                 code = StatusCode::UNPROCESSABLE_ENTITY;

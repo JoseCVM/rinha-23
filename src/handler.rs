@@ -73,9 +73,15 @@ pub async fn count_users(db_pool: DBPool) -> Result<impl Reply> {
 }
 
 pub async fn search_users_handler(query: SearchQuery, db_pool: DBPool) -> Result<impl Reply> {
-    Ok(json(
-        &db::search_users(&db_pool, query.t.unwrap())
-            .await
-            .map_err(|e| reject::custom(e))?,
-    ))
+    match query.t {
+        None => Err(reject::custom(InvalidSearch)),
+        Some(query) => {
+            Ok(json(
+                &db::search_users(&db_pool, query)
+                    .await
+                    .map_err(|e| reject::custom(e))?,
+            ))
+        }
+    }
+    
 }

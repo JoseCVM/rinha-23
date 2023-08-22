@@ -23,17 +23,6 @@ pub async fn health_handler(db_pool: DBPool) -> Result<impl Reply> {
         .map_err(|e| reject::custom(DBQueryError(e)))?;
     Ok(StatusCode::OK)
 }
-async fn check_remote_cache(user_id: &str) -> bool {
-    let url = format!(
-        "http://{}:8000/pessoas/{}",
-        std::env::var("BROTHER").unwrap(),
-        user_id
-    );
-    match reqwest::get(&url).await {
-        Ok(_) => true,
-        Err(_) => false,
-    }
-}
 
 pub async fn create_user_handler(
     body: PossibleCreateUserRequest,

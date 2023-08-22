@@ -1,4 +1,4 @@
-version: '3.5'
+version: '3.8'
 services:
   api1: # API - Instância 01
     image: josecvm/josecvm
@@ -14,7 +14,7 @@ services:
           memory: '0.5GB'
 
   api2: # API - Instância 01
-    image: api-rinha-josecvm
+    image: josecvm/josecvm
     hostname: api2
     depends_on:
       - db

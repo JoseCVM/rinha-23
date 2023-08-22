@@ -47,7 +47,7 @@ pub fn create_pool() -> std::result::Result<DBPool, mobc::Error<Error>> {
         .max_open(DB_POOL_MAX_OPEN)
         .max_idle(DB_POOL_MAX_IDLE)
         .max_lifetime(Some(Duration::from_secs(DB_POOL_EXPIRE_SECONDS)))
-        .get_timeout(None)
+        .get_timeout(Some(Duration::from_secs(DB_POOL_TIMEOUT_SECONDS)))
         .build(manager))
 }
 

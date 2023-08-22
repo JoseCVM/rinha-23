@@ -58,6 +58,7 @@ pub async fn count_users(db_pool: &DBPool) -> Result<i64> {
         .await
         .map_err(DBQueryError)?;
     let count: i64 = rows[0].get(0);
+    drop(con);
     Ok(count)
 }
 
@@ -79,6 +80,7 @@ pub async fn search_users(db_pool: &DBPool, search: String) -> Result<Vec<User>>
 "#;
     let rows = con.query(query, &[&search]).await.map_err(DBQueryError)?;
 
+    drop(con);
     let users: Vec<User> = rows.iter().map(|row| row_to_user(&row)).collect();
     Ok(users)
 }
@@ -101,6 +103,7 @@ pub async fn fetch_user_by_id(db_pool: &DBPool, user_id: &String) -> Result<Opti
         .await
         .map_err(DBQueryError)?;
 
+    drop(con);
     if let Some(row) = row {
         let user = row_to_user(&row); // Assuming a custom function to map row to User with skills
         Ok(Some(user))
@@ -110,9 +113,8 @@ pub async fn fetch_user_by_id(db_pool: &DBPool, user_id: &String) -> Result<Opti
 }
 
 pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<User> {
-    
     let con = get_db_con(db_pool).await?;
-   
+
     let id = Uuid::new_v5(&Uuid::NAMESPACE_OID, &body.apelido.as_bytes());
 
     // Insert user
@@ -165,6 +167,7 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
         None => {}
     }
 
+    drop(con);
     Ok(User {
         id: id.to_string(),
         apelido: body.apelido,

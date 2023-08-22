@@ -1,6 +1,7 @@
 use crate::{data::*, db, error::Error::*, DBPool, Result};
 use moka::future::Cache;
 use serde_derive::Deserialize;
+use uuid::Uuid;
 use warp::{
     http::StatusCode,
     reject,
@@ -32,7 +33,7 @@ pub async fn create_user_handler(
         return Err(reject::custom(MissingRequiredFields));
     }
     let apelido = body.apelido.clone().unwrap();
-    match cache.get(&apelido) {
+    match cache.get(&Uuid::new_v5(&Uuid::NAMESPACE_OID, &apelido.as_bytes()).to_string()) {
         Some(_) => return Err(reject::custom(UserAlreadyExists)),
         None => (),
     };

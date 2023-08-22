@@ -11,10 +11,6 @@ pub enum Error {
     #[error("error executing DB query: {0}")]
     DBQueryError(#[from] tokio_postgres::Error),
     #[error("error creating table: {0}")]
-    DBInitError(tokio_postgres::Error),
-    #[error("error starting DB")]
-    DBFatalError,
-    #[error("error reading file: {0}")]
     ReadFileError(#[from] std::io::Error),
     #[error("Missing required fields in body")]
     MissingRequiredFields,

@@ -4,49 +4,30 @@ use mobc_postgres::{
     tokio_postgres::{self, types::ToSql},
     PgConnectionManager,
 };
-use std::{fs, thread::sleep};
 use std::str::FromStr;
 use std::time::Duration;
+use std::fs;
 use tokio_postgres::{Config, Error, NoTls, Row};
 use uuid::Uuid;
 
 type Result<T> = std::result::Result<T, error::Error>;
 
-const DB_POOL_MAX_OPEN: u64 = 0;
-const DB_POOL_TIMEOUT_SECONDS: u64 = 1;
+const DB_POOL_MAX_OPEN: u64 = 50;
+const DB_POOL_TIMEOUT_SECONDS: u64 = 15;
 const INIT_SQL: &str = "./db.sql";
 
-
-const MAX_RETRIES: u32 = 5; 
-const RETRY_DELAY: Duration = Duration::from_secs(2);
 pub async fn init_db(db_pool: &DBPool) -> Result<()> {
     let init_file = fs::read_to_string(INIT_SQL)?;
 
-    for attempt in 1..=MAX_RETRIES {
-        let con = match get_db_con(db_pool).await {
-            Ok(con) => con,
-            Err(e) => {
-                if attempt == MAX_RETRIES {
-                    return Err(e);
-                }
-                sleep(RETRY_DELAY);
-                continue;
-            }
-        };
+    let con = get_db_con(db_pool).await?;
 
-        match con.batch_execute(init_file.as_str()).await {
-            Ok(_) => return Ok(()),
-            Err(e) => {
-                if attempt == MAX_RETRIES {
-                    return Err(DBInitError(e));
-                }
-                sleep(RETRY_DELAY);
-            }
+    match con.batch_execute(init_file.as_str()).await {
+        Ok(_) => return Ok(()),
+        Err(e) => {
+            eprintln!("Failed to initialize database: {}", e);
+            return Ok(());
         }
     }
-
-    // Ideally, you shouldn't reach this point.
-    Err(DBFatalError)
 }
 
 pub async fn get_db_con(db_pool: &DBPool) -> Result<DBCon> {
@@ -144,7 +125,8 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
     // Insert skills
     match &body.stack {
         Some(skills) => {
-            let query_insert_skill = "INSERT INTO Skills (Skill) VALUES ($1) ON CONFLICT DO NOTHING"; // This ensures we don't get errors if the skill already exists
+            let query_insert_skill =
+                "INSERT INTO Skills (Skill) VALUES ($1) ON CONFLICT DO NOTHING"; // This ensures we don't get errors if the skill already exists
 
             // Insert new skills into Skills table
             for skill in skills {

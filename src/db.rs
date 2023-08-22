@@ -31,7 +31,7 @@ pub async fn get_db_con(db_pool: &DBPool) -> Result<DBCon> {
 }
 
 pub fn create_pool() -> std::result::Result<DBPool, mobc::Error<Error>> {
-    let config = Config::from_str("postgres://postgres@localhost:7878/postgres")?;
+    let config = Config::from_str("postgres://postgres@db:7878/postgres")?;
 
     let manager = PgConnectionManager::new(config, NoTls);
     Ok(Pool::builder()
@@ -44,7 +44,7 @@ pub fn create_pool() -> std::result::Result<DBPool, mobc::Error<Error>> {
 pub async fn search_users(db_pool: &DBPool, search: String) -> Result<Vec<User>> {
     let con = get_db_con(db_pool).await?;
 
-    let search_pattern = format!("%{}%", search);
+    //let search_pattern = format!("%{}%", search);
 
     let query = r#"
     SELECT users.id, users.apelido, users.nome, users.nascimento, ARRAY_AGG(Skills.Skill) as skills
@@ -57,9 +57,8 @@ pub async fn search_users(db_pool: &DBPool, search: String) -> Result<Vec<User>>
     GROUP BY users.id
     LIMIT 50
 "#;
-
     let rows = con
-        .query(query, &[&search_pattern])
+        .query(query, &[&search])
         .await
         .map_err(DBQueryError)?;
 

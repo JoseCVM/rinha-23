@@ -2,7 +2,6 @@ use data::User;
 use mobc::{Connection, Pool};
 use mobc_postgres::{tokio_postgres, PgConnectionManager};
 use std::convert::Infallible;
-use std::time::Duration;
 use tokio_postgres::NoTls;
 use warp::{Filter, Rejection};
 

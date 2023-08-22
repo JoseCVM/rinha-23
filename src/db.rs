@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 type Result<T> = std::result::Result<T, error::Error>;
 
-const DB_POOL_MAX_OPEN: u64 = 50;
+const DB_POOL_MAX_OPEN: u64 = 20;
 const DB_POOL_TIMEOUT_SECONDS: u64 = 15;
 const INIT_SQL: &str = "./db.sql";
 
@@ -91,7 +91,7 @@ pub async fn fetch_user_by_id(db_pool: &DBPool, user_id: &String) -> Result<Opti
         WHERE users.id = $1
         GROUP BY users.id
     "#;
-
+    
     let row = con
         .query_opt(query, &[&user_id])
         .await
@@ -106,16 +106,15 @@ pub async fn fetch_user_by_id(db_pool: &DBPool, user_id: &String) -> Result<Opti
 }
 
 pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<User> {
-    let mut con = get_db_con(db_pool).await?;
+    let con = get_db_con(db_pool).await?;
     let id = Uuid::new_v5(&Uuid::NAMESPACE_OID, &body.apelido.as_bytes()).to_string();
 
-    let transaction = con.transaction().await?;
     // Insert user
     let insert_user_query = format!(
         "INSERT INTO Users (id, apelido, nome, nascimento) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING"
     );
-    transaction
-        .query_one(
+    con
+        .execute(
             insert_user_query.as_str(),
             &[&id, &body.apelido, &body.nome, &body.nascimento],
         )
@@ -130,7 +129,7 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
 
             // Insert new skills into Skills table
             for skill in skills {
-                transaction
+                con
                     .execute(query_insert_skill, &[&skill])
                     .await
                     .map_err(DBQueryError)?;
@@ -141,20 +140,19 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
                 .collect::<Vec<String>>()
                 .join(", ");
             let associate_skills_query = format!(
-                "INSERT INTO UserSkills (UserID, Skill) SELECT $1, Skill FROM Skills WHERE Skill IN ({})",
+                "INSERT INTO UserSkills (UserID, Skill) SELECT $1, Skill FROM Skills WHERE Skill IN ({}) ON CONFLICT DO NOTHING",
                 params
             );
             let mut param_values: Vec<&(dyn ToSql + Sync)> = Vec::new();
             param_values.push(&id);
             param_values.extend(skills.iter().map(|s| s as &(dyn ToSql + Sync)));
-            transaction
+            con
                 .execute(associate_skills_query.as_str(), &param_values)
                 .await
                 .map_err(DBQueryError)?;
         }
         None => {}
     }
-    transaction.commit().await?;
 
     Ok(User {
         id,

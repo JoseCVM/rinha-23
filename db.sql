@@ -16,8 +16,3 @@ CREATE TABLE IF NOT EXISTS UserSkills (
     FOREIGN KEY (UserID) REFERENCES Users(ID) ON DELETE CASCADE,
     FOREIGN KEY (Skill) REFERENCES Skills(Skill) ON DELETE CASCADE
 );
-CREATE EXTENSION pg_trgm WITH SCHEMA pg_catalog;
-CREATE INDEX skill_skill_gin_trgm_idx  ON Skills USING gin  (Skill gin_trgm_ops);
-CREATE INDEX userskill_skill_gin_trgm_idx  ON UserSkills USING gin  (Skill gin_trgm_ops);
-CREATE INDEX users_nome_gin_trgm_idx  ON Users USING gin  (Nome gin_trgm_ops);
-CREATE INDEX users_apelido_gin_trgm_idx  ON Users USING gin  (Apelido gin_trgm_ops);

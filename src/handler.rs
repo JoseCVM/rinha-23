@@ -2,11 +2,11 @@ use crate::{data::*, db, error::Error::*, DBPool, Result};
 use moka::future::Cache;
 use serde_derive::Deserialize;
 use uuid::Uuid;
-use warp::{
-    http::StatusCode,
+use warp::{ 
+    http::{StatusCode, Response},
     reject,
     reply::{json, WithStatus},
-    Reply,
+    Filter, Reply,
 };
 
 #[derive(Deserialize)]
@@ -23,24 +23,46 @@ pub async fn health_handler(db_pool: DBPool) -> Result<impl Reply> {
         .map_err(|e| reject::custom(DBQueryError(e)))?;
     Ok(StatusCode::OK)
 }
+async fn check_remote_cache(user_id: &str) -> bool {
+    let url = format!(
+        "http://{}:8000/pessoas/{}",
+        std::env::var("BROTHER").unwrap(),
+        user_id
+    );
+    match reqwest::get(&url).await {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
 
 pub async fn create_user_handler(
     body: PossibleCreateUserRequest,
     db_pool: DBPool,
     cache: Cache<String, User>,
-) -> Result<WithStatus<impl Reply>> {
+) -> Result<impl Reply> {
     if body.apelido.is_none() || body.nome.is_none() || body.nascimento.is_none() {
         return Err(reject::custom(MissingRequiredFields));
     }
     let apelido = body.apelido.clone().unwrap();
-    match cache.get(&Uuid::new_v5(&Uuid::NAMESPACE_OID, apelido.as_bytes()).to_string()) {
+    let id = Uuid::new_v5(&Uuid::NAMESPACE_OID, apelido.as_bytes()).to_string();
+    match cache.get(&id) {
         Some(_) => {
             //println!("User already exists in cache with id {}", apelido);
-            return Err(reject::custom(UserAlreadyExists))},
-        None => (),
+            return Err(reject::custom(UserAlreadyExists));
+        }
+        None => {
+            // match check_remote_cache(&id).await {
+            //     true => {
+            //         //println!("User already exists in remote cache with id {}", user_id);
+            //         return Err(reject::custom(UserAlreadyExists))
+            //     }
+            //     false => {
+            //         //println!("User does not exist in remote cache with id {}", user_id);
+            //     }
+            // }
+        }
     };
     let create_user_request: CreateUserRequest = {
-        
         CreateUserRequest {
             apelido: apelido,
             nome: body.nome.unwrap(),
@@ -51,7 +73,10 @@ pub async fn create_user_handler(
     match db::create_user(&db_pool, create_user_request).await {
         Ok(user) => {
             cache.insert(user.id.clone(), user.clone()).await;
-            Ok(warp::reply::with_status(json(&user), StatusCode::CREATED))
+            let reply = warp::reply::json(&user);
+            let reply = warp::reply::with_status(reply, StatusCode::CREATED);
+            let reply = warp::reply::with_header(reply, "Location", format!("/pessoas/{}", user.id));
+            Ok(reply.into_response())
         }
         Err(e) => Err(reject::custom(e)),
     }
@@ -77,20 +102,19 @@ pub async fn fetch_user_by_id_handler(
 
 pub async fn count_users(db_pool: DBPool) -> Result<impl Reply> {
     Ok(json(
-        &db::count_users(&db_pool).await.map_err(|e| reject::custom(e))?,
+        &db::count_users(&db_pool)
+            .await
+            .map_err(|e| reject::custom(e))?,
     ))
 }
 
 pub async fn search_users_handler(query: SearchQuery, db_pool: DBPool) -> Result<impl Reply> {
     match query.t {
         None => Err(reject::custom(InvalidSearch)),
-        Some(query) => {
-            Ok(json(
-                &db::search_users(&db_pool, query)
-                    .await
-                    .map_err(|e| reject::custom(e))?,
-            ))
-        }
+        Some(query) => Ok(json(
+            &db::search_users(&db_pool, query)
+                .await
+                .map_err(|e| reject::custom(e))?,
+        )),
     }
-    
 }

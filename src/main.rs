@@ -1,8 +1,8 @@
-use std::time::Duration;
 use data::User;
 use mobc::{Connection, Pool};
 use mobc_postgres::{tokio_postgres, PgConnectionManager};
 use std::convert::Infallible;
+use std::time::Duration;
 use tokio_postgres::NoTls;
 use warp::{Filter, Rejection};
 
@@ -62,6 +62,8 @@ fn with_db(db_pool: DBPool) -> impl Filter<Extract = (DBPool,), Error = Infallib
     warp::any().map(move || db_pool.clone())
 }
 
-fn with_cache(cache: Cache<String, User>) -> impl Filter<Extract = (Cache<String, User>,), Error = Infallible> + Clone {
+fn with_cache(
+    cache: Cache<String, User>,
+) -> impl Filter<Extract = (Cache<String, User>,), Error = Infallible> + Clone {
     warp::any().map(move || cache.clone())
 }

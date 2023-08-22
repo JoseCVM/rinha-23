@@ -13,7 +13,7 @@ use uuid::Uuid;
 type Result<T> = std::result::Result<T, error::Error>;
 
 const DB_POOL_MAX_OPEN: u64 = 0;
-const DB_POOL_TIMEOUT_SECONDS: u64 = 15;
+const DB_POOL_TIMEOUT_SECONDS: u64 = 1;
 const INIT_SQL: &str = "./db.sql";
 
 

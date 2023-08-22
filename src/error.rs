@@ -19,7 +19,7 @@ pub enum Error {
     #[error("User already exists")]
     UserAlreadyExists,
     #[error("Invalid search string")]
-    InvalidSearch
+    InvalidSearch,
 }
 
 #[derive(Serialize)]
@@ -40,16 +40,22 @@ pub async fn handle_rejection(err: Rejection) -> std::result::Result<impl Reply,
         message = "Invalid Body, but in a different way";
     } else if let Some(e) = err.find::<Error>() {
         match e {
-            Error::DBQueryError(dberr) => {
-                if dberr.code().unwrap() == &tokio_postgres::error::SqlState::UNIQUE_VIOLATION {
+            Error::DBQueryError(dberr) => match dberr.code() {
+                Some(_) => {
+                    if dberr.code().unwrap() == &tokio_postgres::error::SqlState::UNIQUE_VIOLATION {
+                        code = StatusCode::UNPROCESSABLE_ENTITY;
+                        message = "Conflict";
+                    } else {
+                        eprintln!("unhandled application error: {:?}", err);
+                        code = StatusCode::INTERNAL_SERVER_ERROR;
+                        message = "Internal Server Error";
+                    }
+                }
+                None => {
                     code = StatusCode::UNPROCESSABLE_ENTITY;
                     message = "Conflict";
-                } else {
-                    eprintln!("unhandled database error: {:?}", dberr);
-                    code = StatusCode::INTERNAL_SERVER_ERROR;
-                    message = "Internal Server Error";
                 }
-            }
+            },
             Error::InvalidSearch => {
                 code = StatusCode::BAD_REQUEST;
                 message = "Invalid Search";

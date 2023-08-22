@@ -13,7 +13,6 @@ use uuid::Uuid;
 type Result<T> = std::result::Result<T, error::Error>;
 
 const DB_POOL_MAX_OPEN: u64 = 0;
-const DB_POOL_MAX_IDLE: u64 = 100;
 const DB_POOL_TIMEOUT_SECONDS: u64 = 15;
 const INIT_SQL: &str = "./db.sql";
 
@@ -63,7 +62,6 @@ pub fn create_pool() -> std::result::Result<DBPool, mobc::Error<Error>> {
     let manager = PgConnectionManager::new(config, NoTls);
     Ok(Pool::builder()
         .max_open(DB_POOL_MAX_OPEN)
-        .max_idle(DB_POOL_MAX_IDLE)
         .get_timeout(Some(Duration::from_secs(DB_POOL_TIMEOUT_SECONDS)))
         .build(manager))
 }

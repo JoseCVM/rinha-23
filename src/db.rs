@@ -24,7 +24,16 @@ pub async fn init_db(db_pool: &DBPool) -> Result<()> {
     let init_file = fs::read_to_string(INIT_SQL)?;
 
     for attempt in 1..=MAX_RETRIES {
-        let con = get_db_con(db_pool).await?;
+        let con = match get_db_con(db_pool).await {
+            Ok(con) => con,
+            Err(e) => {
+                if attempt == MAX_RETRIES {
+                    return Err(e);
+                }
+                sleep(RETRY_DELAY);
+                continue;
+            }
+        };
 
         match con.batch_execute(init_file.as_str()).await {
             Ok(_) => return Ok(()),
@@ -42,7 +51,10 @@ pub async fn init_db(db_pool: &DBPool) -> Result<()> {
 }
 
 pub async fn get_db_con(db_pool: &DBPool) -> Result<DBCon> {
-    db_pool.get().await.map_err(DBPoolError)
+    db_pool.get().await.map_err(|e| {
+        eprintln!("Failed to get DB connection: {}", e);
+        DBPoolError(e)
+    })
 }
 
 pub fn create_pool() -> std::result::Result<DBPool, mobc::Error<Error>> {

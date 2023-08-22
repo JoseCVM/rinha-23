@@ -66,6 +66,12 @@ pub async fn fetch_user_by_id_handler(
     }
 }
 
+pub async fn count_users(db_pool: DBPool) -> Result<impl Reply> {
+    Ok(json(
+        &db::count_users(&db_pool).await.map_err(|e| reject::custom(e))?,
+    ))
+}
+
 pub async fn search_users_handler(query: SearchQuery, db_pool: DBPool) -> Result<impl Reply> {
     Ok(json(
         &db::search_users(&db_pool, query.t.unwrap())

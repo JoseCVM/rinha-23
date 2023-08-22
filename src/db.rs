@@ -31,7 +31,8 @@ pub async fn get_db_con(db_pool: &DBPool) -> Result<DBCon> {
 }
 
 pub fn create_pool() -> std::result::Result<DBPool, mobc::Error<Error>> {
-    let config = Config::from_str("postgres://postgres@db:7878/postgres")?;
+    println!("postgres://postgres@db:5432/postgres");
+    let config = Config::from_str("postgres://postgres@db:5432/postgres")?;
 
     let manager = PgConnectionManager::new(config, NoTls);
     Ok(Pool::builder()
@@ -39,6 +40,16 @@ pub fn create_pool() -> std::result::Result<DBPool, mobc::Error<Error>> {
         .max_idle(DB_POOL_MAX_IDLE)
         .get_timeout(Some(Duration::from_secs(DB_POOL_TIMEOUT_SECONDS)))
         .build(manager))
+}
+
+pub async fn count_users(db_pool: &DBPool) -> Result<i64> {
+    let con = get_db_con(db_pool).await?;
+    let rows = con
+        .query("SELECT COUNT(*) FROM users", &[])
+        .await
+        .map_err(DBQueryError)?;
+    let count: i64 = rows[0].get(0);
+    Ok(count)
 }
 
 pub async fn search_users(db_pool: &DBPool, search: String) -> Result<Vec<User>> {

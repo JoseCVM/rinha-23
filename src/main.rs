@@ -27,7 +27,9 @@ async fn main() {
     let health_route = warp::path!("health")
         .and(with_db(db_pool.clone()))
         .and_then(handler::health_handler);
-
+    let count_route = warp::path!("contagem-pessoas")
+        .and(with_db(db_pool.clone()))
+        .and_then(handler::count_users);
     let users = warp::path("pessoas");
     let users_routes = users
         .and(warp::get())
@@ -48,6 +50,7 @@ async fn main() {
             .and_then(handler::search_users_handler));
 
     let routes = health_route
+        .or(count_route)
         .or(users_routes)
         .with(warp::cors().allow_any_origin())
         .recover(error::handle_rejection);

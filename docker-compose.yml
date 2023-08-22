@@ -1,7 +1,10 @@
 version: '3.8'
 services:
   api1: # API - Instância 01
-    image: josecvm/josecvm
+    #image: josecvm/josecvm
+    build:
+      context: ./
+      dockerfile: dockerfile
     hostname: api1
     depends_on:
       - db
@@ -14,7 +17,10 @@ services:
           memory: '0.5GB'
 
   api2: # API - Instância 01
-    image: josecvm/josecvm
+    #image: josecvm/josecvm
+    build:
+      context: ./
+      dockerfile: dockerfile
     hostname: api2
     depends_on:
       - db
@@ -43,6 +49,8 @@ services:
 
   db: # Banco de dados
    image: postgres
+   environment: 
+    - POSTGRES_HOST_AUTH_METHOD=trust
    deploy:
       resources:
         limits:

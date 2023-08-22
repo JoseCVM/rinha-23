@@ -8,4 +8,6 @@ FROM debian:buster-slim
 COPY --from=builder /app/target/release/api-rinha /usr/local/bin/
 EXPOSE 8000
 
+COPY db.sql /
+
 CMD ["api-rinha"]

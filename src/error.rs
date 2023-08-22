@@ -54,6 +54,10 @@ pub async fn handle_rejection(err: Rejection) -> std::result::Result<impl Reply,
                 code = StatusCode::BAD_REQUEST;
                 message = "Invalid Search";
             }
+            Error::UserAlreadyExists => {
+                code = StatusCode::UNPROCESSABLE_ENTITY;
+                message = "Conflict";
+            }
             Error::MissingRequiredFields => {
                 code = StatusCode::UNPROCESSABLE_ENTITY;
                 message = "Invalid Body";

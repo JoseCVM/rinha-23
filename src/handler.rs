@@ -34,7 +34,9 @@ pub async fn create_user_handler(
     }
     let apelido = body.apelido.clone().unwrap();
     match cache.get(&Uuid::new_v5(&Uuid::NAMESPACE_OID, &apelido.as_bytes()).to_string()) {
-        Some(_) => return Err(reject::custom(UserAlreadyExists)),
+        Some(_) => {
+            println!("Cache size: {}", cache.weighted_size());
+            return Err(reject::custom(UserAlreadyExists))},
         None => (),
     };
     let create_user_request: CreateUserRequest = {

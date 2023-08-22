@@ -4,16 +4,18 @@ use mobc_postgres::{
     tokio_postgres::{self, types::ToSql},
     PgConnectionManager,
 };
+use std::fs;
 use std::str::FromStr;
 use std::time::Duration;
-use std::fs;
 use tokio_postgres::{Config, Error, NoTls, Row};
 use uuid::Uuid;
 
 type Result<T> = std::result::Result<T, error::Error>;
 
 const DB_POOL_MAX_OPEN: u64 = 20;
-const DB_POOL_TIMEOUT_SECONDS: u64 = 15;
+const DB_POOL_TIMEOUT_SECONDS: u64 = 5;
+const DB_POOL_MAX_IDLE: u64 = 8;
+const DB_POOL_EXPIRE_SECONDS: u64 = 30;
 const INIT_SQL: &str = "./db.sql";
 
 pub async fn init_db(db_pool: &DBPool) -> Result<()> {
@@ -43,7 +45,9 @@ pub fn create_pool() -> std::result::Result<DBPool, mobc::Error<Error>> {
     let manager = PgConnectionManager::new(config, NoTls);
     Ok(Pool::builder()
         .max_open(DB_POOL_MAX_OPEN)
-        .get_timeout(Some(Duration::from_secs(DB_POOL_TIMEOUT_SECONDS)))
+        .max_idle(DB_POOL_MAX_IDLE)
+        .max_lifetime(Some(Duration::from_secs(DB_POOL_EXPIRE_SECONDS)))
+        .get_timeout(None)
         .build(manager))
 }
 
@@ -66,7 +70,7 @@ pub async fn search_users(db_pool: &DBPool, search: String) -> Result<Vec<User>>
     SELECT users.id, users.apelido, users.nome, users.nascimento, ARRAY_AGG(Skills.Skill) as skills
     FROM users
     LEFT JOIN UserSkills ON users.id = UserSkills.UserID
-    LEFT JOIN Skills ON UserSkills.Skill = Skills.Skill
+    LEFT JOIN Skills ON UserSkills.SkillId = Skills.SkillId
     WHERE users.nome LIKE $1
         OR users.apelido LIKE $1
         OR Skills.Skill LIKE $1
@@ -80,18 +84,18 @@ pub async fn search_users(db_pool: &DBPool, search: String) -> Result<Vec<User>>
 }
 
 pub async fn fetch_user_by_id(db_pool: &DBPool, user_id: &String) -> Result<Option<User>> {
-    println!("fetch_user_by_id: {}", user_id);
+    let user_id = Uuid::parse_str(user_id).map_err(|_| InvalidSearch)?;
     let con = get_db_con(db_pool).await?;
 
     let query = r#"
         SELECT users.*, array_agg(Skills.Skill) AS skills
         FROM users
         LEFT JOIN UserSkills ON users.id = UserSkills.UserID
-        LEFT JOIN Skills ON UserSkills.Skill = Skills.Skill
+        LEFT JOIN Skills ON UserSkills.SkillId = Skills.SkillId
         WHERE users.id = $1
         GROUP BY users.id
     "#;
-    
+
     let row = con
         .query_opt(query, &[&user_id])
         .await
@@ -106,21 +110,30 @@ pub async fn fetch_user_by_id(db_pool: &DBPool, user_id: &String) -> Result<Opti
 }
 
 pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<User> {
+    
     let con = get_db_con(db_pool).await?;
-    let id = Uuid::new_v5(&Uuid::NAMESPACE_OID, &body.apelido.as_bytes()).to_string();
+   
+    let id = Uuid::new_v5(&Uuid::NAMESPACE_OID, &body.apelido.as_bytes());
 
     // Insert user
-    let insert_user_query = format!(
-        "INSERT INTO Users (id, apelido, nome, nascimento) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING"
-    );
-    con
+    let insert_user_query =
+        format!("INSERT INTO Users (id, apelido, nome, nascimento) VALUES ($1, $2, $3, $4)");
+    match con
         .execute(
             insert_user_query.as_str(),
             &[&id, &body.apelido, &body.nome, &body.nascimento],
         )
         .await
-        .map_err(DBQueryError)?;
-
+    {
+        Ok(_) => {}
+        Err(e) => {
+            if e.code() == Some(&tokio_postgres::error::SqlState::UNIQUE_VIOLATION) {
+                return Err(UserAlreadyExists);
+            } else {
+                return Err(DBQueryError(e));
+            }
+        }
+    }
     // Insert skills
     match &body.stack {
         Some(skills) => {
@@ -129,8 +142,7 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
 
             // Insert new skills into Skills table
             for skill in skills {
-                con
-                    .execute(query_insert_skill, &[&skill])
+                con.execute(query_insert_skill, &[&skill])
                     .await
                     .map_err(DBQueryError)?;
             }
@@ -140,14 +152,13 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
                 .collect::<Vec<String>>()
                 .join(", ");
             let associate_skills_query = format!(
-                "INSERT INTO UserSkills (UserID, Skill) SELECT $1, Skill FROM Skills WHERE Skill IN ({}) ON CONFLICT DO NOTHING",
+                "INSERT INTO UserSkills (UserID, SkillId) SELECT $1, SkillId FROM Skills WHERE Skill IN ({}) ON CONFLICT DO NOTHING",
                 params
             );
             let mut param_values: Vec<&(dyn ToSql + Sync)> = Vec::new();
             param_values.push(&id);
             param_values.extend(skills.iter().map(|s| s as &(dyn ToSql + Sync)));
-            con
-                .execute(associate_skills_query.as_str(), &param_values)
+            con.execute(associate_skills_query.as_str(), &param_values)
                 .await
                 .map_err(DBQueryError)?;
         }
@@ -155,7 +166,7 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
     }
 
     Ok(User {
-        id,
+        id: id.to_string(),
         apelido: body.apelido,
         nome: body.nome,
         nascimento: body.nascimento,
@@ -165,7 +176,8 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
 
 fn row_to_user(row: &Row) -> User {
     let skill: Vec<String> = row.try_get("skills").unwrap_or(Vec::new());
-    let id: String = row.get("id");
+    let id: Uuid = row.get("id");
+    let id = id.to_string();
     let apelido: String = row.get("apelido");
     let nome: String = row.get("nome");
     let nascimento: String = row.get("nascimento");

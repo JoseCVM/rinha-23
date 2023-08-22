@@ -21,6 +21,8 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: docker-compose up -d
+    - run: docker-compose ps
+    - run: docker-compose logs 
     - name: Load test
       run: |
         git clone --single-branch --quiet https://github.com/zanfranceschi/rinha-de-backend-2023-q3

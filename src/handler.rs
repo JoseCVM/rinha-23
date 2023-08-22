@@ -33,9 +33,9 @@ pub async fn create_user_handler(
         return Err(reject::custom(MissingRequiredFields));
     }
     let apelido = body.apelido.clone().unwrap();
-    match cache.get(&Uuid::new_v5(&Uuid::NAMESPACE_OID, &apelido.as_bytes()).to_string()) {
+    match cache.get(&Uuid::new_v5(&Uuid::NAMESPACE_OID, apelido.as_bytes()).to_string()) {
         Some(_) => {
-            println!("Cache size: {}", cache.weighted_size());
+            //println!("User already exists in cache with id {}", apelido);
             return Err(reject::custom(UserAlreadyExists))},
         None => (),
     };

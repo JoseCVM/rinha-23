@@ -19,7 +19,7 @@ use moka::future::Cache;
 #[tokio::main]
 async fn main() {
     let db_pool = db::create_pool().expect("database pool can be created");
-    let cache = Cache::builder().max_capacity(150000).time_to_idle(Duration::new(1200, 0)).build();
+    let cache = Cache::new(150000);
     db::init_db(&db_pool)
         .await
         .expect("database can be initialized");

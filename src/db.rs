@@ -112,7 +112,7 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
     let transaction = con.transaction().await?;
     // Insert user
     let insert_user_query = format!(
-        "INSERT INTO Users (id, apelido, nome, nascimento) VALUES ($1, $2, $3, $4) RETURNING *"
+        "INSERT INTO Users (id, apelido, nome, nascimento) VALUES ($1, $2, $3, $4) RETURNING * ON CONFLICT DO NOTHING"
     );
     transaction
         .query_one(

@@ -20,6 +20,8 @@ pub enum Error {
     MissingRequiredFields,
     #[error("User not found")]
     UserNotFound,
+    #[error("User already exists")]
+    UserAlreadyExists,
     #[error("Invalid search string")]
     InvalidSearch
 }

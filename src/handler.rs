@@ -28,12 +28,18 @@ pub async fn create_user_handler(
     db_pool: DBPool,
     cache: Cache<String, User>,
 ) -> Result<WithStatus<impl Reply>> {
+    if body.apelido.is_none() || body.nome.is_none() || body.nascimento.is_none() {
+        return Err(reject::custom(MissingRequiredFields));
+    }
+    let apelido = body.apelido.clone().unwrap();
+    match cache.get(&apelido) {
+        Some(_) => return Err(reject::custom(UserAlreadyExists)),
+        None => (),
+    };
     let create_user_request: CreateUserRequest = {
-        if body.apelido.is_none() || body.nome.is_none() || body.nascimento.is_none() {
-            return Err(reject::custom(MissingRequiredFields));
-        }
+        
         CreateUserRequest {
-            apelido: body.apelido.unwrap(),
+            apelido: apelido,
             nome: body.nome.unwrap(),
             nascimento: body.nascimento.unwrap(),
             stack: body.stack,

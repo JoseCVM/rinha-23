@@ -12,8 +12,8 @@ use uuid::Uuid;
 
 type Result<T> = std::result::Result<T, error::Error>;
 
-const DB_POOL_MAX_OPEN: u64 = 32;
-const DB_POOL_MAX_IDLE: u64 = 8;
+const DB_POOL_MAX_OPEN: u64 = 0;
+const DB_POOL_MAX_IDLE: u64 = 100;
 const DB_POOL_TIMEOUT_SECONDS: u64 = 15;
 const INIT_SQL: &str = "./db.sql";
 
@@ -146,11 +146,12 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
     // Insert skills
     match &body.stack {
         Some(skills) => {
-            let query = "INSERT INTO UserSkills (UserID, Skill) VALUES ($1, $2)";
+            let query_insert_skill = "INSERT INTO Skills (Skill) VALUES ($1) ON CONFLICT DO NOTHING"; // This ensures we don't get errors if the skill already exists
 
+            // Insert new skills into Skills table
             for skill in skills {
                 transaction
-                    .execute(query, &[&id, &skill])
+                    .execute(query_insert_skill, &[&skill])
                     .await
                     .map_err(DBQueryError)?;
             }

@@ -4,7 +4,7 @@ use mobc_postgres::{
     tokio_postgres::{self, types::ToSql},
     PgConnectionManager,
 };
-use std::fs;
+use std::{fs, thread::sleep};
 use std::str::FromStr;
 use std::time::Duration;
 use tokio_postgres::{Config, Error, NoTls, Row};
@@ -17,13 +17,28 @@ const DB_POOL_MAX_IDLE: u64 = 8;
 const DB_POOL_TIMEOUT_SECONDS: u64 = 15;
 const INIT_SQL: &str = "./db.sql";
 
+
+const MAX_RETRIES: u32 = 5; 
+const RETRY_DELAY: Duration = Duration::from_secs(2);
 pub async fn init_db(db_pool: &DBPool) -> Result<()> {
     let init_file = fs::read_to_string(INIT_SQL)?;
-    let con = get_db_con(db_pool).await?;
-    con.batch_execute(init_file.as_str())
-        .await
-        .map_err(DBInitError)?;
-    Ok(())
+
+    for attempt in 1..=MAX_RETRIES {
+        let con = get_db_con(db_pool).await?;
+
+        match con.batch_execute(init_file.as_str()).await {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                if attempt == MAX_RETRIES {
+                    return Err(DBInitError(e));
+                }
+                sleep(RETRY_DELAY);
+            }
+        }
+    }
+
+    // Ideally, you shouldn't reach this point.
+    Err(DBFatalError)
 }
 
 pub async fn get_db_con(db_pool: &DBPool) -> Result<DBCon> {
@@ -67,12 +82,9 @@ pub async fn search_users(db_pool: &DBPool, search: String) -> Result<Vec<User>>
     GROUP BY users.id
     LIMIT 50
 "#;
-    let rows = con
-        .query(query, &[&search])
-        .await
-        .map_err(DBQueryError)?;
+    let rows = con.query(query, &[&search]).await.map_err(DBQueryError)?;
 
-    let users : Vec<User> = rows.iter().map(|row| row_to_user(&row)).collect();
+    let users: Vec<User> = rows.iter().map(|row| row_to_user(&row)).collect();
     Ok(users)
 }
 
@@ -111,12 +123,13 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
     let insert_user_query = format!(
         "INSERT INTO Users (id, apelido, nome, nascimento) VALUES ($1, $2, $3, $4) RETURNING *"
     );
-    transaction.query_one(
-        insert_user_query.as_str(),
-        &[&id, &body.apelido, &body.nome, &body.nascimento],
-    )
-    .await
-    .map_err(DBQueryError)?;
+    transaction
+        .query_one(
+            insert_user_query.as_str(),
+            &[&id, &body.apelido, &body.nome, &body.nascimento],
+        )
+        .await
+        .map_err(DBQueryError)?;
 
     // Insert skills
     match &body.stack {
@@ -141,7 +154,8 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
             let mut param_values: Vec<&(dyn ToSql + Sync)> = Vec::new();
             param_values.push(&id);
             param_values.extend(skills.iter().map(|s| s as &(dyn ToSql + Sync)));
-            transaction.execute(associate_skills_query.as_str(), &param_values)
+            transaction
+                .execute(associate_skills_query.as_str(), &param_values)
                 .await
                 .map_err(DBQueryError)?;
         }

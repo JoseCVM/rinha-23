@@ -27,7 +27,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.2'
+          cpus: '0.25'
           memory: '0.5GB'
 
   nginx: # Load Balancer
@@ -42,7 +42,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.2'
+          cpus: '0.25'
           memory: '0.5GB'
 
   db: # Banco de dados
@@ -52,5 +52,5 @@ services:
    deploy:
       resources:
         limits:
-          cpus: '0.9'
+          cpus: '0.8'
           memory: '1.5GB'

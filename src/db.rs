@@ -12,9 +12,9 @@ use uuid::Uuid;
 
 type Result<T> = std::result::Result<T, error::Error>;
 
-const DB_POOL_MAX_OPEN: u64 = 20;
-const DB_POOL_TIMEOUT_SECONDS: u64 = 5;
-const DB_POOL_MAX_IDLE: u64 = 8;
+const DB_POOL_MAX_OPEN: u64 = 40;
+const DB_POOL_TIMEOUT_SECONDS: u64 = 15;
+const DB_POOL_MAX_IDLE: u64 = 20;
 const DB_POOL_EXPIRE_SECONDS: u64 = 30;
 const INIT_SQL: &str = "./db.sql";
 
@@ -47,7 +47,7 @@ pub fn create_pool() -> std::result::Result<DBPool, mobc::Error<Error>> {
         .max_open(DB_POOL_MAX_OPEN)
         .max_idle(DB_POOL_MAX_IDLE)
         .max_lifetime(Some(Duration::from_secs(DB_POOL_EXPIRE_SECONDS)))
-        .get_timeout(Some(Duration::from_secs(DB_POOL_TIMEOUT_SECONDS)))
+        .get_timeout(None)
         .build(manager))
 }
 

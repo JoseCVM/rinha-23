@@ -58,7 +58,7 @@ pub async fn count_users(db_pool: &DBPool) -> Result<i64> {
         .await
         .map_err(DBQueryError)?;
     let count: i64 = rows[0].get(0);
-    drop(con);
+
     Ok(count)
 }
 
@@ -80,7 +80,6 @@ pub async fn search_users(db_pool: &DBPool, search: String) -> Result<Vec<User>>
 "#;
     let rows = con.query(query, &[&search]).await.map_err(DBQueryError)?;
 
-    drop(con);
     let users: Vec<User> = rows.iter().map(|row| row_to_user(&row)).collect();
     Ok(users)
 }
@@ -103,7 +102,6 @@ pub async fn fetch_user_by_id(db_pool: &DBPool, user_id: &String) -> Result<Opti
         .await
         .map_err(DBQueryError)?;
 
-    drop(con);
     if let Some(row) = row {
         let user = row_to_user(&row); // Assuming a custom function to map row to User with skills
         Ok(Some(user))
@@ -139,35 +137,31 @@ pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<Us
     // Insert skills
     match &body.stack {
         Some(skills) => {
-            let query_insert_skill =
-                "INSERT INTO Skills (Skill) VALUES ($1) ON CONFLICT DO NOTHING"; // This ensures we don't get errors if the skill already exists
-
-            // Insert new skills into Skills table
+            let mut sql_batch = "DO $$ BEGIN\n".to_owned();
             for skill in skills {
-                con.execute(query_insert_skill, &[&skill])
-                    .await
-                    .map_err(DBQueryError)?;
+                sql_batch.push_str(&format!(
+                    "INSERT INTO Skills (Skill) VALUES ('{}') ON CONFLICT DO NOTHING;\n",
+                    skill
+                ));
             }
 
-            let params = (1..=skills.len())
-                .map(|i| format!("${}", i + 1))
+            let skill_values = skills
+                .iter()
+                .map(|s| format!("'{}'", s))
                 .collect::<Vec<String>>()
                 .join(", ");
-            let associate_skills_query = format!(
-                "INSERT INTO UserSkills (UserID, SkillId) SELECT $1, SkillId FROM Skills WHERE Skill IN ({}) ON CONFLICT DO NOTHING",
-                params
-            );
-            let mut param_values: Vec<&(dyn ToSql + Sync)> = Vec::new();
-            param_values.push(&id);
-            param_values.extend(skills.iter().map(|s| s as &(dyn ToSql + Sync)));
-            con.execute(associate_skills_query.as_str(), &param_values)
-                .await
-                .map_err(DBQueryError)?;
+            sql_batch.push_str(&format!(
+                "INSERT INTO UserSkills (UserID, SkillId) SELECT '{}', SkillId FROM Skills WHERE Skill IN ({}) ON CONFLICT DO NOTHING;\n",
+                id,
+                skill_values
+            ));
+
+            sql_batch.push_str("END $$;\n");
+            con.batch_execute(sql_batch.as_str()).await.unwrap();
         }
         None => {}
     }
 
-    drop(con);
     Ok(User {
         id: id.to_string(),
         apelido: body.apelido,

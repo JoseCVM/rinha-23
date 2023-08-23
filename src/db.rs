@@ -44,15 +44,7 @@ pub async fn init_db(db_pool: &DBPool) -> Result<()> {
             }
         }
     }
-    let con = db_pool.get().await.unwrap();
-
-    match con.batch_execute(init_file.as_str()).await {
-        Ok(_) => return Ok(()),
-        Err(e) => {
-            eprintln!("Failed to initialize database: {}", e);
-            return Ok(());
-        }
-    }
+    Ok(())
 }
 
 pub fn create_pool() -> std::result::Result<DBPool, mobc::Error<Error>> {

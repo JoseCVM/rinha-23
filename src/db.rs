@@ -21,7 +21,7 @@ const INIT_SQL: &str = "./db.sql";
 pub async fn init_db(db_pool: &DBPool) -> Result<()> {
     let init_file = fs::read_to_string(INIT_SQL)?;
 
-    let con = get_db_con(db_pool).await?;
+    let con = db_pool.get().await.unwrap();
 
     match con.batch_execute(init_file.as_str()).await {
         Ok(_) => return Ok(()),
@@ -32,12 +32,6 @@ pub async fn init_db(db_pool: &DBPool) -> Result<()> {
     }
 }
 
-pub async fn get_db_con(db_pool: &DBPool) -> Result<DBCon> {
-    db_pool.get().await.map_err(|e| {
-        eprintln!("Failed to get DB connection: {}", e);
-        DBPoolError(e)
-    })
-}
 
 pub fn create_pool() -> std::result::Result<DBPool, mobc::Error<Error>> {
     let config = Config::from_str("postgres://postgres@db:5432/postgres")?;
@@ -52,7 +46,7 @@ pub fn create_pool() -> std::result::Result<DBPool, mobc::Error<Error>> {
 }
 
 pub async fn count_users(db_pool: &DBPool) -> Result<i64> {
-    let con = get_db_con(db_pool).await?;
+    let con = db_pool.get().await.unwrap();
     let rows = con
         .query("SELECT COUNT(*) FROM users", &[])
         .await
@@ -63,7 +57,7 @@ pub async fn count_users(db_pool: &DBPool) -> Result<i64> {
 }
 
 pub async fn search_users(db_pool: &DBPool, search: String) -> Result<Vec<User>> {
-    let con = get_db_con(db_pool).await?;
+    let con = db_pool.get().await.unwrap();
 
     //let search_pattern = format!("%{}%", search);
 
@@ -86,7 +80,7 @@ pub async fn search_users(db_pool: &DBPool, search: String) -> Result<Vec<User>>
 
 pub async fn fetch_user_by_id(db_pool: &DBPool, user_id: &String) -> Result<Option<User>> {
     let user_id = Uuid::parse_str(user_id).map_err(|_| InvalidSearch)?;
-    let con = get_db_con(db_pool).await?;
+    let con = db_pool.get().await.unwrap();
 
     let query = r#"
         SELECT users.*, array_agg(Skills.Skill) AS skills
@@ -111,7 +105,7 @@ pub async fn fetch_user_by_id(db_pool: &DBPool, user_id: &String) -> Result<Opti
 }
 
 pub async fn create_user(db_pool: &DBPool, body: CreateUserRequest) -> Result<User> {
-    let con = get_db_con(db_pool).await?;
+    let con = db_pool.get().await.unwrap();
 
     let id = Uuid::new_v5(&Uuid::NAMESPACE_OID, &body.apelido.as_bytes());
 

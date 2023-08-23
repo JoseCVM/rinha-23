@@ -15,9 +15,7 @@ pub struct SearchQuery {
 }
 
 pub async fn health_handler(db_pool: DBPool) -> Result<impl Reply> {
-    let db = db::get_db_con(&db_pool)
-        .await
-        .map_err(|e| reject::custom(e))?;
+    let db = db_pool.get().await.unwrap();
     db.execute("SELECT 1", &[])
         .await
         .map_err(|e| reject::custom(DBQueryError(e)))?;

@@ -4,6 +4,7 @@ use mobc_postgres::{
     tokio_postgres::{self, types::ToSql},
     PgConnectionManager,
 };
+use tokio::time::sleep;
 use std::fs;
 use std::str::FromStr;
 use std::time::Duration;
@@ -21,6 +22,28 @@ const INIT_SQL: &str = "./db.sql";
 pub async fn init_db(db_pool: &DBPool) -> Result<()> {
     let init_file = fs::read_to_string(INIT_SQL)?;
 
+    for attempt in 1..=5 {
+        let con = match db_pool.get().await {
+            Ok(con) => con,
+            Err(e) => {
+                if attempt == 5 {
+                    return Err(DBPoolError(e));
+                }
+                sleep(Duration::from_secs(1)).await;
+                continue;
+            }
+        };
+
+        match con.batch_execute(init_file.as_str()).await {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                if attempt == 5 {
+                    return Err(DBPoolError(mobc::Error::Inner(e)));
+                }
+                sleep(Duration::from_secs(1)).await;
+            }
+        }
+    }
     let con = db_pool.get().await.unwrap();
 
     match con.batch_execute(init_file.as_str()).await {
@@ -31,7 +54,6 @@ pub async fn init_db(db_pool: &DBPool) -> Result<()> {
         }
     }
 }
-
 
 pub fn create_pool() -> std::result::Result<DBPool, mobc::Error<Error>> {
     let config = Config::from_str("postgres://postgres@db:5432/postgres")?;
